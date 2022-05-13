@@ -1,11 +1,12 @@
 from operator import itemgetter
+from matplotlib.markers import MarkerStyle
 #from tkinter.tix import MAX
 import numpy as np
-from matplotlib import pyplot as plt
 from matplotlib import animation
 from matplotlib.animation import FuncAnimation
 import time
 import cv2
+import matplotlib.pyplot as plt
 
 plt.style.use('seaborn-pastel')
 
@@ -16,6 +17,10 @@ MAX_SPEED         	= 10
 MAX_SEPARATION		= 200
 FPS 				= 30
 RECORD = False
+DRAW_BOIDS = True
+SEPERATION_WEIGHT = 0.10
+ALLIGNMENT_WEIGHT = 0.50
+COHESION_WEIGHT = 0.1
 
 # Positions
 x = np.random.uniform(low=0, high=ARENA_SIDE_LENGTH, size=(NUMBER_OF_ROBOTS,))
@@ -26,6 +31,10 @@ vx = np.random.uniform(low=-MAX_SPEED/2, high=MAX_SPEED/2, size=(NUMBER_OF_ROBOT
 vy = np.random.uniform(low=-MAX_SPEED/2, high=MAX_SPEED/2, size=(NUMBER_OF_ROBOTS,))
 vx[0] = 0.1
 vy[0] = 0.001
+
+# For plotting
+directions = []
+xdirections = []
 
 # Set up the output (1024 x 768):
 #fig = plt.figure(figsize=(10.24, 7.68), dpi=100)
@@ -47,7 +56,7 @@ def wrapdist(x1, x2):	# Distance points towards x1
 
 	#min(x1 - x2, x1 - (x2 + ARENA_SIDE_LENGTH), x1 - (x2 - ARENA_SIDE_LENGTH))
 
-def getSeperation(x1, y1, x, y, pixel_array):
+def getSeperation(x1, y1, x, y):
 	seperation = np.array([0., 0.])
 	for x_, y_ in zip(x, y):
 		dist = np.linalg.norm([wrapdist(x1, x_), wrapdist(y1, y_)])
@@ -99,8 +108,9 @@ def wrap(z):
 #	return points, arrow
 
 def animate():
-	global x, y, vx, vy, a
-	pixel_array = np.full((ARENA_SIDE_LENGTH, ARENA_SIDE_LENGTH, 3), (255,255,255) , dtype=np.uint8)
+	global x, y, vx, vy, directions
+	if DRAW_BOIDS:
+		pixel_array = np.full((ARENA_SIDE_LENGTH, ARENA_SIDE_LENGTH, 3), (255,255,255) , dtype=np.uint8)
 	x = np.array(list(map(wrap, x + vx)))
 	y = np.array(list(map(wrap, y + vy)))
 
@@ -112,17 +122,18 @@ def animate():
 		#vy[i] = (vy[i] / np.linalg.norm([vx[i], vy[i]])) * MAX_SPEED
 			#print("speed after cap: ", np.linalg.norm([vx[i], vy[i]]))
 		#pixel_array = cv2.circle(pixel_array, (int(x[i]), int(y[i])), MAX_SEPARATION, (200,200,255), 3)
-		pixel_array = cv2.circle(pixel_array, (int(x[i]), int(y[i])), 5, (255,0,0), 3)
+		if DRAW_BOIDS:
+			pixel_array = cv2.circle(pixel_array, (int(x[i]), int(y[i])), 5, (255,0,0), 3)
 	#	print(getSeperation(x_, y_, x, y))
-		distvec = getSeperation(x[i], y[i], x, y, pixel_array)
+		distvec = getSeperation(x[i], y[i], x, y)
 		vx[i] -= distvec[0] * 0.1
 		vy[i] -= distvec[1] * 0.1
 
 		allignmentvec = getAllignment(x[i], y[i], x, y, vx, vy)
 		currentSpeed = np.linalg.norm([vx[i], vy[i]])
 		#print(currentSpeed)
-		vx[i] = vx[i] + allignmentvec[0] * 0.1
-		vy[i] = vy[i] + allignmentvec[1] * 0.1
+		vx[i] = vx[i] + allignmentvec[0] * 0.5
+		vy[i] = vy[i] + allignmentvec[1] * 0.5
 		time.sleep(0.001)
 		vx_ = (vx[i] / np.linalg.norm([vx[i], vy[i]])) * currentSpeed
 		vy[i] = (vy[i] / np.linalg.norm([vx[i], vy[i]])) * currentSpeed
@@ -140,29 +151,53 @@ def animate():
 		vy[i] = (vy[i] / np.linalg.norm([vx[i], vy[i]])) * MAX_SPEED
 		
 		if abs(distvec[0]) > 0 or abs(distvec[1]) > 0:
-			pixel_array = cv2.arrowedLine(pixel_array, (int(x[i]), int(y[i])), (int(x[i])-int(distvec[0]*10), int(y[i])-int(distvec[1]*10)),
+			if DRAW_BOIDS:
+				pixel_array = cv2.arrowedLine(pixel_array, (int(x[i]), int(y[i])), (int(x[i])-int(distvec[0]*10), int(y[i])-int(distvec[1]*10)),
 										(0,100,0), 2)
 			pass
 
-	cv2.imshow("idfk", pixel_array)
-	cv2.waitKey(int(1000/FPS))
-	print(np.linalg.norm([vx[0], vy[0]]))
+	if DRAW_BOIDS:
+		cv2.imshow("boids", pixel_array)
+		cv2.waitKey(int(1000/FPS))
+	directions.append(np.arctan2(vy,vx))
+	len_dir = len(directions)
+	print(len_dir)
+	if len_dir > 1:		# Fixing wrapping jump in plot by setting nan if change too big.
+		for i in range(len(directions[0])):
+			if abs(directions[len_dir-1][i] - directions[len_dir-2][i]) > np.pi :
+				directions[len_dir-2][i] = np.nan
 
+		
+	#directions = np.arctan2(vy,vx)
+	#print(directions)
+	#print(directions)
+	#print(np.shape(directions))
 	
 	#print('Step ', i + 1, '/', STEPS, end='\r')
-	
-	return pixel_array
+	if DRAW_BOIDS:
+		return pixel_array
+	return
 
-if RECORD == True:
+if RECORD and DRAW_BOIDS:
 	fourcc=cv2.VideoWriter_fourcc('M','J','P','G')
 	video=cv2.VideoWriter('output2.mp4',fourcc,FPS,(ARENA_SIDE_LENGTH, ARENA_SIDE_LENGTH))
 
 for i in range(0,STEPS):
 	
-	if RECORD == True:
+	if RECORD and DRAW_BOIDS:
 		video.write(animate())
 	else: 
 		animate()
+	xdirections.append([i] * len(directions[0]))
+
+	if not i%100 :
+		plt.figure(figsize=(13, 6))
+		#plt.scatter(xdirections, directions, marker = "_")
+		plt.plot(xdirections, directions)
+		plt.xlabel("time steps")
+		plt.ylabel("Boid angle")
+		plt.title("Separation: " + str(SEPERATION_WEIGHT) + ",   Alignment: "+ str(ALLIGNMENT_WEIGHT) + ",   Cohesion: " + str(COHESION_WEIGHT))
+		plt.show()
 
 if RECORD == True:
 	video.release()
