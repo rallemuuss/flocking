@@ -7,6 +7,7 @@ from matplotlib.animation import FuncAnimation
 import time
 import cv2
 import matplotlib.pyplot as plt
+from numba import jit
 
 plt.style.use('seaborn-pastel')
 
@@ -17,10 +18,10 @@ MAX_SPEED         	= 10
 MAX_SEPARATION		= 200
 FPS 				= 30
 RECORD = False
-DRAW_BOIDS = False
-SEPERATION_WEIGHT = 0.0
-ALLIGNMENT_WEIGHT = 0.1
-COHESION_WEIGHT = 0.1
+DRAW_BOIDS = True
+SEPERATION_WEIGHT = 0.1
+ALLIGNMENT_WEIGHT = 0.5
+COHESION_WEIGHT = 0.5
 
 # Positions
 x = np.random.uniform(low=0, high=ARENA_SIDE_LENGTH, size=(NUMBER_OF_ROBOTS,))
@@ -37,6 +38,7 @@ directions = []
 xdirections = []
 shortest_neighbor_dist = []
 shortest_neighbor_mean = []
+neighbor_count = []
 
 # Set up the output (1024 x 768):
 #fig = plt.figure(figsize=(10.24, 7.68), dpi=100)
@@ -44,27 +46,36 @@ shortest_neighbor_mean = []
 #points, = ax.plot([], [], 'bo', lw=0, )
 #arrow = ax.arrow([],[],[],[])
 
+@jit(nopython=True)	
+def wrappoint(x1, x2):	# Wraps position of x2
+	d = x1 - x2
+	if abs(d) > abs(x1 - (x2 + ARENA_SIDE_LENGTH)):
+		return x2 + ARENA_SIDE_LENGTH
+	if abs(d) > abs(x1 - (x2 - ARENA_SIDE_LENGTH)):
+		return x2 - ARENA_SIDE_LENGTH
+	else:
+		return x2
 
-
-
+@jit(nopython=True)	
 def wrapdist(x1, x2):	# Distance points towards x1
 	d = x1 - x2
-	if abs(d) > abs(d + ARENA_SIDE_LENGTH):
-		return d + ARENA_SIDE_LENGTH
-	if abs(d) > abs(d - ARENA_SIDE_LENGTH):
-		return d - ARENA_SIDE_LENGTH
+	if abs(d) > abs(x1 - (x2 + ARENA_SIDE_LENGTH)):
+		return x1 - (x2 + ARENA_SIDE_LENGTH)
+	if abs(d) > abs(x1 - (x2 - ARENA_SIDE_LENGTH)):
+		return x1 - (x2 - ARENA_SIDE_LENGTH)
 	else:
 		return d
 
 	#min(x1 - x2, x1 - (x2 + ARENA_SIDE_LENGTH), x1 - (x2 - ARENA_SIDE_LENGTH))
 
+@jit(nopython=True)	
 def getSeperation(x1, y1, x, y):
 	seperation = np.array([0., 0.])
 	for x_, y_ in zip(x, y):
-		dist = np.linalg.norm([wrapdist(x1, x_), wrapdist(y1, y_)])
+		dist = np.linalg.norm(np.array([wrapdist(x1, x_), wrapdist(y1, y_)]))
 		if 0 < dist < MAX_SEPARATION:
-			direction =  [	wrapdist(x1, x_), 
-							wrapdist(y1, y_)]
+			direction =  np.array([	wrapdist(x1, x_), 
+							wrapdist(y1, y_)])
 			direction = direction / np.linalg.norm(direction)
 			weight = ((MAX_SEPARATION/dist) ) - 1
 			seperation -= direction * weight
@@ -72,43 +83,55 @@ def getSeperation(x1, y1, x, y):
 			#print(seperation)
 	return seperation
 	
+@jit(nopython=True)	
 def getAllignment(x1, y1, x, y, vx, vy):
 	heading = np.array([0., 0.])
 	for x_, vx_, y_, vy_ in zip(x, vx, y, vy):
-		dist = np.linalg.norm([wrapdist(x1, x_), wrapdist(y1, y_)])
+		dist = np.linalg.norm(np.array([wrapdist(x1, x_), wrapdist(y1, y_)]))
 		if 0 < dist < MAX_SEPARATION:
-			#weight = ((MAX_SEPARATION/dist) ) - 1
-			heading += [vx_, vy_] 
-	if any(heading != 0):
+			heading += np.array([vx_, vy_])
+	if np.any(heading != 0):
 		return heading / np.linalg.norm(heading)
 	else:
 		return heading
 
-
+@jit(nopython=True)
 def getCohesion(x1, y1, x, y):
 	center = np.array([0., 0.])
 	i = 0
 	for x_, y_ in zip(x, y):
-		dist = np.linalg.norm([wrapdist(x1, x_), wrapdist(y1, y_)])
+		dist = np.linalg.norm(np.array([wrapdist(x1, x_), wrapdist(y1, y_)]))
 		if 0 < dist < MAX_SEPARATION:
-			center += np.array([x_, y_])
+			center += np.array([wrappoint(x1, x_), wrappoint(y1, y_)])
 			i += 1
 	if i > 0:
 		center = center / i
-		direction = center - [x1, y1]
+		direction = (center - np.array([x1, y1])) 
+		direction = direction / np.linalg.norm(direction)
 	else:
 		direction = np.array([0., 0.])
-	return direction
+	return direction 
 
+@jit(nopython=True)	
 def getClosestNeighbor(x1, y1, x, y):
 	closest = 1000
 	for x_, y_ in zip(x, y):
-		dist = np.linalg.norm([wrapdist(x1, x_), wrapdist(y1, y_)])
+		dist = np.linalg.norm(np.array([wrapdist(x1, x_), wrapdist(y1, y_)]))
 		if 0 < dist < closest:
 			closest = dist
 	return closest
 
+@jit(nopython=True)	
+def countNeighbor(x1, y1, x, y):
+	count = 0
+	for x_, y_ in zip(x, y):
+		dist = np.linalg.norm(np.array([wrapdist(x1, x_), wrapdist(y1, y_)]))
+		if 0 < dist < MAX_SEPARATION:
+			count +=1
+	return count
+
 # Make the environment toroidal 
+@jit(nopython=True)	
 def wrap(z):    
 	return z % ARENA_SIDE_LENGTH
 
@@ -116,7 +139,6 @@ def wrap(z):
 #	points.set_data([], [])
 #	arrow.set_data([], [], [], [])
 #	return points, arrow
-
 def animate():
 	global x, y, vx, vy, directions
 	if DRAW_BOIDS:
@@ -125,6 +147,7 @@ def animate():
 	y = np.array(list(map(wrap, y + vy)))
 
 	shortest_neighbor_dist.append(np.zeros(NUMBER_OF_ROBOTS))
+	neighbor_count.append(np.zeros(NUMBER_OF_ROBOTS))
 	#for x_, y_ in zip(x, y):
 	for i in range(len(x)):
 		#if np.linalg.norm([vx[i], vy[i]]) > MAX_SPEED:
@@ -139,6 +162,11 @@ def animate():
 		distvec = getSeperation(x[i], y[i], x, y)
 		vx[i] -= distvec[0] * SEPERATION_WEIGHT
 		vy[i] -= distvec[1] * SEPERATION_WEIGHT
+		if abs(distvec[0]) > 0 or abs(distvec[1]) > 0:
+			if DRAW_BOIDS:
+				pixel_array = cv2.arrowedLine(pixel_array, (int(x[i]), int(y[i])), (int(x[i])-int(distvec[0]*10), int(y[i])-int(distvec[1]*10)),
+										(0,100,0), 2)
+			pass
 
 		allignmentvec = getAllignment(x[i], y[i], x, y, vx, vy)
 		currentSpeed = np.linalg.norm([vx[i], vy[i]])
@@ -161,13 +189,11 @@ def animate():
 		vx[i] = (vx[i] / np.linalg.norm([vx[i], vy[i]])) * MAX_SPEED
 		vy[i] = (vy[i] / np.linalg.norm([vx[i], vy[i]])) * MAX_SPEED
 		
-		if abs(distvec[0]) > 0 or abs(distvec[1]) > 0:
-			if DRAW_BOIDS:
-				pixel_array = cv2.arrowedLine(pixel_array, (int(x[i]), int(y[i])), (int(x[i])-int(distvec[0]*10), int(y[i])-int(distvec[1]*10)),
-										(0,100,0), 2)
-			pass
+
 
 		shortest_neighbor_dist[-1][i] = getClosestNeighbor(x[i], y[i], x, y)
+		neighbor_count[-1][i] = countNeighbor(x[i], y[i], x, y)
+
 
 	shortest_neighbor_mean.append(np.mean(shortest_neighbor_dist[-1]))
 
@@ -217,17 +243,26 @@ for i in range(0,STEPS):
 		plt.title("Separation: " + str(SEPERATION_WEIGHT) + ",   Alignment: "+ str(ALLIGNMENT_WEIGHT) + ",   Cohesion: " + str(COHESION_WEIGHT) 
 			+ ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
 		plt.savefig("Angle__Separation-" + str(SEPERATION_WEIGHT) + "_Alignment-"+ str(ALLIGNMENT_WEIGHT) + "_Cohesion-" + str(COHESION_WEIGHT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
-		plt.show()
 
 		plt.figure(2, figsize=(13, 6))
 		plt.plot(xdirections, shortest_neighbor_dist)
 		plt.xlabel("Time steps")
-		plt.ylabel("Boid angle")
+		plt.ylabel("Nearest neighbor distance")
 		plt.title("Separation: " + str(SEPERATION_WEIGHT) + ",   Alignment: "+ str(ALLIGNMENT_WEIGHT) + ",   Cohesion: " + str(COHESION_WEIGHT) 
 			+ ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
 		plt.plot(np.arange(len(shortest_neighbor_mean)), shortest_neighbor_mean, linewidth=5.0, linestyle=':', color='#4b0082', dash_capstyle='round')
 		plt.savefig("Distance__Separation-" + str(SEPERATION_WEIGHT) + "_Alignment-"+ str(ALLIGNMENT_WEIGHT) + "_Cohesion-" + str(COHESION_WEIGHT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
+
+		plt.figure(3, figsize=(13, 6))
+		plt.plot(xdirections, neighbor_count)
+		plt.xlabel("Time steps")
+		plt.ylabel("Visible BOIDS")
+		plt.title("Separation: " + str(SEPERATION_WEIGHT) + ",   Alignment: "+ str(ALLIGNMENT_WEIGHT) + ",   Cohesion: " + str(COHESION_WEIGHT) 
+			+ ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
+		#plt.plot(np.arange(len(shortest_neighbor_mean)), shortest_neighbor_mean, linewidth=5.0, linestyle=':', color='#4b0082', dash_capstyle='round')
+		plt.savefig("Neighbors__Separation-" + str(SEPERATION_WEIGHT) + "_Alignment-"+ str(ALLIGNMENT_WEIGHT) + "_Cohesion-" + str(COHESION_WEIGHT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
 		plt.show()
+
 		quit()
 
 if RECORD == True:
