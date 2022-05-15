@@ -17,9 +17,9 @@ MAX_SPEED         	= 10
 MAX_SEPARATION		= 200
 FPS 				= 30
 RECORD = False
-DRAW_BOIDS = True
-SEPERATION_WEIGHT = 0.10
-ALLIGNMENT_WEIGHT = 0.50
+DRAW_BOIDS = False
+SEPERATION_WEIGHT = 0.0
+ALLIGNMENT_WEIGHT = 0.1
 COHESION_WEIGHT = 0.1
 
 # Positions
@@ -35,6 +35,8 @@ vy[0] = 0.001
 # For plotting
 directions = []
 xdirections = []
+shortest_neighbor_dist = []
+shortest_neighbor_mean = []
 
 # Set up the output (1024 x 768):
 #fig = plt.figure(figsize=(10.24, 7.68), dpi=100)
@@ -98,6 +100,14 @@ def getCohesion(x1, y1, x, y):
 		direction = np.array([0., 0.])
 	return direction
 
+def getClosestNeighbor(x1, y1, x, y):
+	closest = 1000
+	for x_, y_ in zip(x, y):
+		dist = np.linalg.norm([wrapdist(x1, x_), wrapdist(y1, y_)])
+		if 0 < dist < closest:
+			closest = dist
+	return closest
+
 # Make the environment toroidal 
 def wrap(z):    
 	return z % ARENA_SIDE_LENGTH
@@ -114,6 +124,7 @@ def animate():
 	x = np.array(list(map(wrap, x + vx)))
 	y = np.array(list(map(wrap, y + vy)))
 
+	shortest_neighbor_dist.append(np.zeros(NUMBER_OF_ROBOTS))
 	#for x_, y_ in zip(x, y):
 	for i in range(len(x)):
 		#if np.linalg.norm([vx[i], vy[i]]) > MAX_SPEED:
@@ -126,22 +137,22 @@ def animate():
 			pixel_array = cv2.circle(pixel_array, (int(x[i]), int(y[i])), 5, (255,0,0), 3)
 	#	print(getSeperation(x_, y_, x, y))
 		distvec = getSeperation(x[i], y[i], x, y)
-		vx[i] -= distvec[0] * 0.1
-		vy[i] -= distvec[1] * 0.1
+		vx[i] -= distvec[0] * SEPERATION_WEIGHT
+		vy[i] -= distvec[1] * SEPERATION_WEIGHT
 
 		allignmentvec = getAllignment(x[i], y[i], x, y, vx, vy)
 		currentSpeed = np.linalg.norm([vx[i], vy[i]])
 		#print(currentSpeed)
-		vx[i] = vx[i] + allignmentvec[0] * 0.5
-		vy[i] = vy[i] + allignmentvec[1] * 0.5
+		vx[i] = vx[i] + allignmentvec[0] * ALLIGNMENT_WEIGHT
+		vy[i] = vy[i] + allignmentvec[1] * ALLIGNMENT_WEIGHT
 		time.sleep(0.001)
 		vx_ = (vx[i] / np.linalg.norm([vx[i], vy[i]])) * currentSpeed
 		vy[i] = (vy[i] / np.linalg.norm([vx[i], vy[i]])) * currentSpeed
 		vx[i] = vx_
 
 		centervec = getCohesion(x[i], y[i], x, y)
-		vx[i] += centervec[0] * 0.01
-		vy[i] += centervec[1] * 0.01
+		vx[i] += centervec[0] * COHESION_WEIGHT
+		vy[i] += centervec[1] * COHESION_WEIGHT
 		#print("One down")
 		#points.set_data(x, y)
 		#points, = ax.plot(x, y, 'bo', lw=0, )
@@ -156,9 +167,14 @@ def animate():
 										(0,100,0), 2)
 			pass
 
+		shortest_neighbor_dist[-1][i] = getClosestNeighbor(x[i], y[i], x, y)
+
+	shortest_neighbor_mean.append(np.mean(shortest_neighbor_dist[-1]))
+
 	if DRAW_BOIDS:
 		cv2.imshow("boids", pixel_array)
 		cv2.waitKey(int(1000/FPS))
+
 	directions.append(np.arctan2(vy,vx))
 	len_dir = len(directions)
 	print(len_dir)
@@ -166,6 +182,8 @@ def animate():
 		for i in range(len(directions[0])):
 			if abs(directions[len_dir-1][i] - directions[len_dir-2][i]) > np.pi :
 				directions[len_dir-2][i] = np.nan
+	
+	#print(shortest_neighbor_dist)
 
 		
 	#directions = np.arctan2(vy,vx)
@@ -190,14 +208,27 @@ for i in range(0,STEPS):
 		animate()
 	xdirections.append([i] * len(directions[0]))
 
-	if not i%100 :
-		plt.figure(figsize=(13, 6))
+	if i == 400:#not i%100 and i:
+		plt.figure(1, figsize=(13, 6))
 		#plt.scatter(xdirections, directions, marker = "_")
 		plt.plot(xdirections, directions)
-		plt.xlabel("time steps")
+		plt.xlabel("Time steps")
 		plt.ylabel("Boid angle")
-		plt.title("Separation: " + str(SEPERATION_WEIGHT) + ",   Alignment: "+ str(ALLIGNMENT_WEIGHT) + ",   Cohesion: " + str(COHESION_WEIGHT))
+		plt.title("Separation: " + str(SEPERATION_WEIGHT) + ",   Alignment: "+ str(ALLIGNMENT_WEIGHT) + ",   Cohesion: " + str(COHESION_WEIGHT) 
+			+ ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
+		plt.savefig("Angle__Separation-" + str(SEPERATION_WEIGHT) + "_Alignment-"+ str(ALLIGNMENT_WEIGHT) + "_Cohesion-" + str(COHESION_WEIGHT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
 		plt.show()
+
+		plt.figure(2, figsize=(13, 6))
+		plt.plot(xdirections, shortest_neighbor_dist)
+		plt.xlabel("Time steps")
+		plt.ylabel("Boid angle")
+		plt.title("Separation: " + str(SEPERATION_WEIGHT) + ",   Alignment: "+ str(ALLIGNMENT_WEIGHT) + ",   Cohesion: " + str(COHESION_WEIGHT) 
+			+ ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
+		plt.plot(np.arange(len(shortest_neighbor_mean)), shortest_neighbor_mean, linewidth=5.0, linestyle=':', color='#4b0082', dash_capstyle='round')
+		plt.savefig("Distance__Separation-" + str(SEPERATION_WEIGHT) + "_Alignment-"+ str(ALLIGNMENT_WEIGHT) + "_Cohesion-" + str(COHESION_WEIGHT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
+		plt.show()
+		quit()
 
 if RECORD == True:
 	video.release()
