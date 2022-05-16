@@ -12,16 +12,19 @@ from numba import jit
 plt.style.use('seaborn-pastel')
 
 ARENA_SIDE_LENGTH 	= 1000		# in pixels
-NUMBER_OF_ROBOTS  	= 50
+NUMBER_OF_ROBOTS  	= 20
 STEPS             	= 1500
 MAX_SPEED         	= 10
 MAX_SEPARATION		= 200
+CLUSTER_RANGE  		= MAX_SEPARATION * 0.5
 FPS 				= 30
 RECORD = False
 DRAW_BOIDS = True
-SEPERATION_WEIGHT = 0.1
-ALLIGNMENT_WEIGHT = 0.5
-COHESION_WEIGHT = 0.5
+SEPERATION_WEIGHT = 0.2
+ALLIGNMENT_WEIGHT = 0.1
+COHESION_WEIGHT = 1
+
+BIN_SCALE = 0.2
 
 # Positions
 x = np.random.uniform(low=0, high=ARENA_SIDE_LENGTH, size=(NUMBER_OF_ROBOTS,))
@@ -143,6 +146,7 @@ def animate():
 	global x, y, vx, vy, directions
 	if DRAW_BOIDS:
 		pixel_array = np.full((ARENA_SIDE_LENGTH, ARENA_SIDE_LENGTH, 3), (255,255,255) , dtype=np.uint8)
+	bin_array = np.full((int(ARENA_SIDE_LENGTH*3*BIN_SCALE), int(ARENA_SIDE_LENGTH*3*BIN_SCALE), 1), 0 , dtype=np.uint8)
 	x = np.array(list(map(wrap, x + vx)))
 	y = np.array(list(map(wrap, y + vy)))
 
@@ -158,6 +162,11 @@ def animate():
 		#pixel_array = cv2.circle(pixel_array, (int(x[i]), int(y[i])), MAX_SEPARATION, (200,200,255), 3)
 		if DRAW_BOIDS:
 			pixel_array = cv2.circle(pixel_array, (int(x[i]), int(y[i])), 5, (255,0,0), 3)
+		#bin_array = cv2.circle(pixel_array, (int(x[i]), int(y[i])), MAX_SEPARATION, 255, -1)
+		#bin_array = cv2.circle(pixel_array, (int(x[i]+ARENA_SIDE_LENGTH), int(y[i]+ARENA_SIDE_LENGTH)), MAX_SEPARATION, 255, -1)
+		for j in [0, 1, 2]:
+			for k in [0, 1, 2]:
+				bin_array = cv2.circle(bin_array, (int((x[i] + ARENA_SIDE_LENGTH*j)*BIN_SCALE), int((y[i] + ARENA_SIDE_LENGTH*k)*BIN_SCALE)), int(CLUSTER_RANGE*BIN_SCALE), 255, -1)
 	#	print(getSeperation(x_, y_, x, y))
 		distvec = getSeperation(x[i], y[i], x, y)
 		vx[i] -= distvec[0] * SEPERATION_WEIGHT
@@ -200,15 +209,28 @@ def animate():
 	if DRAW_BOIDS:
 		cv2.imshow("boids", pixel_array)
 		cv2.waitKey(int(1000/FPS))
-
+	
+	(numLabels, labels, stats, centroids) = cv2.connectedComponentsWithStats(bin_array)
+	clusters = 0
+	for center in centroids[1:]:
+		#print(center)
+		bin_array = cv2.circle(bin_array, (int(center[0]), int(center[1])), 3, 177, -1)
+		if ARENA_SIDE_LENGTH*BIN_SCALE < center[0] < 2*ARENA_SIDE_LENGTH*BIN_SCALE:
+			if ARENA_SIDE_LENGTH*BIN_SCALE < center[1] < 2*ARENA_SIDE_LENGTH*BIN_SCALE:
+				clusters += 1
+		#print(center )
+	print(clusters)
 	directions.append(np.arctan2(vy,vx))
 	len_dir = len(directions)
-	print(len_dir)
+	#print(len_dir)
 	if len_dir > 1:		# Fixing wrapping jump in plot by setting nan if change too big.
 		for i in range(len(directions[0])):
 			if abs(directions[len_dir-1][i] - directions[len_dir-2][i]) > np.pi :
 				directions[len_dir-2][i] = np.nan
 	
+
+	cv2.imshow("drenge", bin_array[int(ARENA_SIDE_LENGTH*BIN_SCALE):int(ARENA_SIDE_LENGTH*2*BIN_SCALE) , int(ARENA_SIDE_LENGTH*BIN_SCALE):int(ARENA_SIDE_LENGTH*2*BIN_SCALE)])
+	cv2.waitKey(int(1000/FPS))
 	#print(shortest_neighbor_dist)
 
 		
