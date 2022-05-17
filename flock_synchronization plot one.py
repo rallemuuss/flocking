@@ -18,10 +18,7 @@ ACTIVATION_NEEDED   	= 1			# value
 PERIOD  				= ACTIVATION_NEEDED / ACTIVATION_INCREASE	# T
 PULSE_COUPLING_CONSTANT = 0.1		# e
 RECORD 					= False
-graphic					= False or RECORD
-TESTING_E 				= np.array([0.05, 0.1, 0.15, 0.2])
-TESTING_E_n 			= 50
-
+graphic					= False 	or RECORD
 # Positions
 x = np.random.uniform(low=0, high=ARENA_SIDE_LENGTH, size=(NUMBER_OF_ROBOTS,))
 y = np.random.uniform(low=0, high=ARENA_SIDE_LENGTH, size=(NUMBER_OF_ROBOTS,))
@@ -36,7 +33,7 @@ activation = np.random.uniform(low=0, high=ACTIVATION_NEEDED, size=(NUMBER_OF_RO
 activation_level = []
 xactivation_level = []
 variance = []
-time_to_synchronize = np.zeros((len(TESTING_E), TESTING_E_n))
+time_to_synchronize = []
 xtime_to_synchronize = [[]]
 
 
@@ -58,15 +55,14 @@ def wrap(z):
 
 
 @jit(nopython=True)	
-def findNeighbors(x1, y1, x, y, activation, activation_copy, couple):
-	seperation = np.array([0., 0.])
+def findNeighbors(x1, y1, x, y, activation, activation_copy):
 	a_i = 0
 	for x_, y_, a_c_ in zip(x, y, activation_copy):		# Counts number of flashes seen by agent
 		dist = np.linalg.norm(np.array([wrapdist(x1, x_), wrapdist(y1, y_)]))
 		if 0 < dist < MAX_SEPARATION and a_c_ == 0:
 			a_i += 1
 	#print(PULSE_COUPLING_CONSTANT)
-	return (1 / PERIOD) / FPS + couple * a_i * activation
+	return (1 / PERIOD) / FPS + PULSE_COUPLING_CONSTANT * a_i * activation
 
 
 def reset():
@@ -86,7 +82,7 @@ def reset():
 	xactivation_level = []
 	variance = []
 
-def animate(couple):
+def animate():
 	global x, y, vx, vy, activation
 	if graphic:
 		pixel_array = np.full((ARENA_SIDE_LENGTH, ARENA_SIDE_LENGTH, 3), (255,255,255) , dtype=np.uint8)
@@ -104,12 +100,12 @@ def animate(couple):
 				pixel_array = cv2.circle(pixel_array, (int(x[i]), int(y[i])), 5, (0,0,0), 3)
 			pass
 
-	activation_level.append(np.array(activation))
+	activation_level.append(activation[0])
 	variance.append(np.var(activation))
 
 	activation_copy = copy.deepcopy(activation)
 	for i in range(len(x)):
-		activation[i] += findNeighbors(x[i], y[i], x, y, activation[i], activation_copy, couple)
+		activation[i] += findNeighbors(x[i], y[i], x, y, activation[i], activation_copy)
 		# print(activation[i])
 		#activation[i] += ACTIVATION_INCREASE/FPS
 		
@@ -123,74 +119,45 @@ def animate(couple):
 		return pixel_array
 
 
-for j, coupling in enumerate(TESTING_E):
+
+if RECORD == True:
+	fourcc=cv2.VideoWriter_fourcc('M','J','P','G')
+	video=cv2.VideoWriter('output2.mp4',fourcc,FPS,(ARENA_SIDE_LENGTH, ARENA_SIDE_LENGTH))
+reset()
+
+for i in range(0,STEPS):
 	
-	PULSE_COUPLING_CONSTANT = coupling
-	print("Testing for ", PULSE_COUPLING_CONSTANT)
-	for k in range(TESTING_E_n):
+	if RECORD == True:
+		video.write(animate())
+	else: 
+		animate()
+	#xactivation_level.append([i] * len(activation_level[0]))
+	#print(activation_level)
+	#time.sleep(1)
+	#print(variance[i])
 
-		print("Test #", k)
+	if i == 400:#not i%100 and i:
+		plt.figure(1, figsize=(13, 6))
+		plt.plot(np.arange(len(activation_level)), activation_level, 1, marker = ",")
+		#plt.plot(xactivation_level, activation_level)
+		plt.xlabel("Time steps")
+		plt.ylabel("Activation level")
+		plt.title("Period: " + str(PERIOD*FPS) + ",   Pulse coupling const: " + str(PULSE_COUPLING_CONSTANT) + ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
+		plt.savefig("sync/Single_Activation_Period-" + str(PERIOD*FPS) + "_Pulse-coupling-const-" + str(PULSE_COUPLING_CONSTANT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
+
+		plt.figure(2, figsize=(13, 6))
+		plt.scatter(np.arange(len(variance)), variance, 1, marker = ",")
+		#plt.plot(xactivation_level, activation_level)
+		plt.xlabel("Time steps")
+		plt.ylabel("Variance level")
+		plt.title("Period: " + str(PERIOD*FPS) + ",   Pulse coupling const: " + str(PULSE_COUPLING_CONSTANT) + ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
+		plt.savefig("sync/Single_Variance-Period-" + str(PERIOD*FPS) + "_Pulse-coupling-const-" + str(PULSE_COUPLING_CONSTANT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
+		plt.show()
+
 		if RECORD == True:
-			fourcc=cv2.VideoWriter_fourcc('M','J','P','G')
-			video=cv2.VideoWriter('output2.mp4',fourcc,FPS,(ARENA_SIDE_LENGTH, ARENA_SIDE_LENGTH))
-		reset()
+			video.release()
+		break
 
-		for i in range(0,STEPS):
-			
-			if RECORD == True:
-				video.write(animate(coupling))
-			else: 
-				animate(coupling)
-			xactivation_level.append([i] * len(activation_level[0]))
-			#print(activation_level)
-			#time.sleep(1)
-			#print(variance[i])
-			if variance[i] < 0.001:
-				print(i)
-				time_to_synchronize[j][k] = i
-				break
-			
-			if i == STEPS-1:
-				time_to_synchronize[j][k] = i
-				print(i)
-
-			if False: # i == 400:#not i%100 and i:
-				plt.figure(1, figsize=(13, 6))
-				plt.scatter(xactivation_level, activation_level, 1, marker = ",")
-				#plt.plot(xactivation_level, activation_level)
-				plt.xlabel("Time steps")
-				plt.ylabel("Activation level")
-				plt.title("Period: " + str(PERIOD*FPS) + ",   Pulse coupling const: " + str(PULSE_COUPLING_CONSTANT) + ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
-				plt.savefig("sync/Activation_Period-" + str(PERIOD*FPS) + "_Pulse-coupling-const-" + str(PULSE_COUPLING_CONSTANT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
-
-				plt.figure(2, figsize=(13, 6))
-				plt.scatter(np.arange(len(variance)), variance, 1, marker = ",")
-				#plt.plot(xactivation_level, activation_level)
-				plt.xlabel("Time steps")
-				plt.ylabel("Variance level")
-				plt.title("Period: " + str(PERIOD*FPS) + ",   Pulse coupling const: " + str(PULSE_COUPLING_CONSTANT) + ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
-				plt.savefig("sync/Variance-Period-" + str(PERIOD*FPS) + "_Pulse-coupling-const-" + str(PULSE_COUPLING_CONSTANT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
-				plt.show()
-
-				if RECORD == True:
-					video.release()
-				break
-
-
-means = np.mean(time_to_synchronize, 1)
-stds = np.std(time_to_synchronize, 1)
-fig, ax = plt.subplots( figsize=(13, 6))
-ax.bar(np.arange(len(TESTING_E)), means, yerr=stds, align='center', alpha=0.5, ecolor='black', capsize=10)
-ax.set_ylabel('Timesteps before synchronization')
-ax.set_xticks(np.arange(len(TESTING_E)))
-ax.set_xticklabels(TESTING_E)
-ax.set_title("Period: " + str(PERIOD*FPS) + ",   No. robots: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION) + ",   Trials: " + str(TESTING_E_n))
-ax.yaxis.grid(True)
-
-# Save the figure and show
-plt.tight_layout()
-plt.savefig('sync/bar_plot_with_error_bars.png')
-plt.show()
 
 
 #ACTIVATION_INCREASE 		# increase pr second
