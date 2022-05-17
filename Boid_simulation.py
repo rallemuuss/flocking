@@ -19,10 +19,12 @@ MAX_SEPARATION		= 200
 CLUSTER_RANGE  		= MAX_SEPARATION * 0.5
 FPS 				= 30
 RECORD = False
+SAVE_FIG = False
 DRAW_BOIDS = True
-SEPERATION_WEIGHT = 0.2
-ALLIGNMENT_WEIGHT = 0.1
+SEPERATION_WEIGHT = 1
+ALLIGNMENT_WEIGHT = 1
 COHESION_WEIGHT = 1
+ARROW_SCALE = 30
 
 BIN_SCALE = 0.2
 
@@ -173,8 +175,8 @@ def animate():
 		vy[i] -= distvec[1] * SEPERATION_WEIGHT
 		if abs(distvec[0]) > 0 or abs(distvec[1]) > 0:
 			if DRAW_BOIDS:
-				pixel_array = cv2.arrowedLine(pixel_array, (int(x[i]), int(y[i])), (int(x[i])-int(distvec[0]*10), int(y[i])-int(distvec[1]*10)),
-										(0,100,0), 2)
+				pixel_array = cv2.arrowedLine(pixel_array, (int(x[i]), int(y[i])), (int(x[i])-int(distvec[0]*SEPERATION_WEIGHT*ARROW_SCALE), int(y[i])-int(distvec[1]*SEPERATION_WEIGHT*ARROW_SCALE)),
+										(255,0,0), 2)
 			pass
 
 		allignmentvec = getAllignment(x[i], y[i], x, y, vx, vy)
@@ -182,7 +184,11 @@ def animate():
 		#print(currentSpeed)
 		vx[i] = vx[i] + allignmentvec[0] * ALLIGNMENT_WEIGHT
 		vy[i] = vy[i] + allignmentvec[1] * ALLIGNMENT_WEIGHT
-		time.sleep(0.001)
+		if abs(allignmentvec[0]) > 0 or abs(allignmentvec[1]) > 0:
+			if DRAW_BOIDS:
+				pixel_array = cv2.arrowedLine(pixel_array, (int(x[i]), int(y[i])), (int(x[i])+int(allignmentvec[0]*ALLIGNMENT_WEIGHT*ARROW_SCALE), int(y[i])+int(allignmentvec[1]*ALLIGNMENT_WEIGHT*ARROW_SCALE)),
+										(0,255,0), 2)
+			pass
 		vx_ = (vx[i] / np.linalg.norm([vx[i], vy[i]])) * currentSpeed
 		vy[i] = (vy[i] / np.linalg.norm([vx[i], vy[i]])) * currentSpeed
 		vx[i] = vx_
@@ -190,6 +196,11 @@ def animate():
 		centervec = getCohesion(x[i], y[i], x, y)
 		vx[i] += centervec[0] * COHESION_WEIGHT
 		vy[i] += centervec[1] * COHESION_WEIGHT
+		if abs(centervec[0]) > 0 or abs(centervec[1]) > 0:
+			if DRAW_BOIDS:
+				pixel_array = cv2.arrowedLine(pixel_array, (int(x[i]), int(y[i])), (int(x[i])+int(centervec[0]*COHESION_WEIGHT*ARROW_SCALE), int(y[i])+int(centervec[1]*COHESION_WEIGHT*ARROW_SCALE)),
+										(0,0,255), 2)
+			pass
 		#print("One down")
 		#points.set_data(x, y)
 		#points, = ax.plot(x, y, 'bo', lw=0, )
@@ -264,7 +275,7 @@ for i in range(0,STEPS):
 		plt.ylabel("Boid angle")
 		plt.title("Separation: " + str(SEPERATION_WEIGHT) + ",   Alignment: "+ str(ALLIGNMENT_WEIGHT) + ",   Cohesion: " + str(COHESION_WEIGHT) 
 			+ ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
-		plt.savefig("Angle__Separation-" + str(SEPERATION_WEIGHT) + "_Alignment-"+ str(ALLIGNMENT_WEIGHT) + "_Cohesion-" + str(COHESION_WEIGHT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
+		if SAVE_FIG : plt.savefig("Angle__Separation-" + str(SEPERATION_WEIGHT) + "_Alignment-"+ str(ALLIGNMENT_WEIGHT) + "_Cohesion-" + str(COHESION_WEIGHT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
 
 		plt.figure(2, figsize=(13, 6))
 		plt.plot(xdirections, shortest_neighbor_dist)
@@ -273,7 +284,7 @@ for i in range(0,STEPS):
 		plt.title("Separation: " + str(SEPERATION_WEIGHT) + ",   Alignment: "+ str(ALLIGNMENT_WEIGHT) + ",   Cohesion: " + str(COHESION_WEIGHT) 
 			+ ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
 		plt.plot(np.arange(len(shortest_neighbor_mean)), shortest_neighbor_mean, linewidth=5.0, linestyle=':', color='#4b0082', dash_capstyle='round')
-		plt.savefig("Distance__Separation-" + str(SEPERATION_WEIGHT) + "_Alignment-"+ str(ALLIGNMENT_WEIGHT) + "_Cohesion-" + str(COHESION_WEIGHT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
+		if SAVE_FIG : plt.savefig("Distance__Separation-" + str(SEPERATION_WEIGHT) + "_Alignment-"+ str(ALLIGNMENT_WEIGHT) + "_Cohesion-" + str(COHESION_WEIGHT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
 
 		plt.figure(3, figsize=(13, 6))
 		plt.plot(xdirections, neighbor_count)
@@ -282,7 +293,7 @@ for i in range(0,STEPS):
 		plt.title("Separation: " + str(SEPERATION_WEIGHT) + ",   Alignment: "+ str(ALLIGNMENT_WEIGHT) + ",   Cohesion: " + str(COHESION_WEIGHT) 
 			+ ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
 		#plt.plot(np.arange(len(shortest_neighbor_mean)), shortest_neighbor_mean, linewidth=5.0, linestyle=':', color='#4b0082', dash_capstyle='round')
-		plt.savefig("Neighbors__Separation-" + str(SEPERATION_WEIGHT) + "_Alignment-"+ str(ALLIGNMENT_WEIGHT) + "_Cohesion-" + str(COHESION_WEIGHT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
+		if SAVE_FIG : plt.savefig("Neighbors__Separation-" + str(SEPERATION_WEIGHT) + "_Alignment-"+ str(ALLIGNMENT_WEIGHT) + "_Cohesion-" + str(COHESION_WEIGHT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
 		plt.show()
 
 		quit()
