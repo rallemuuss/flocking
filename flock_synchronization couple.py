@@ -19,7 +19,7 @@ PERIOD  				= ACTIVATION_NEEDED / ACTIVATION_INCREASE	# T
 PULSE_COUPLING_CONSTANT = 0.1		# e
 RECORD 					= False
 graphic					= False or RECORD
-TESTING_E 				= np.array([0.05, 0.1, 0.15, 0.2])
+TESTING_E 				= np.array([0.01, 0.05, 0.1, 0.15, 0.2])
 TESTING_E_n 			= 50
 
 # Positions
@@ -29,6 +29,7 @@ y = np.random.uniform(low=0, high=ARENA_SIDE_LENGTH, size=(NUMBER_OF_ROBOTS,))
 # Velocities
 vx = np.random.uniform(low=-MAX_SPEED/2, high=MAX_SPEED/2, size=(NUMBER_OF_ROBOTS,))
 vy = np.random.uniform(low=-MAX_SPEED/2, high=MAX_SPEED/2, size=(NUMBER_OF_ROBOTS,))
+
 
 # Activation
 activation = np.random.uniform(low=0, high=ACTIVATION_NEEDED, size=(NUMBER_OF_ROBOTS,))
@@ -169,7 +170,7 @@ for j, coupling in enumerate(TESTING_E):
 				plt.xlabel("Time steps")
 				plt.ylabel("Variance level")
 				plt.title("Period: " + str(PERIOD*FPS) + ",   Pulse coupling const: " + str(PULSE_COUPLING_CONSTANT) + ",   No BOIDS: " + str(NUMBER_OF_ROBOTS) + ",   Neighbourhood distance: " + str(MAX_SEPARATION))
-				plt.savefig("sync/Variance-Period-" + str(PERIOD*FPS) + "_Pulse-coupling-const-" + str(PULSE_COUPLING_CONSTANT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
+				plt.savefig("sync/Static_Variance-Period-" + str(PERIOD*FPS) + "_Pulse-coupling-const-" + str(PULSE_COUPLING_CONSTANT) + "_No-BOIDS-" + str(NUMBER_OF_ROBOTS) + "_Neighbourhood-distance-" + str(MAX_SEPARATION) + ".png")
 				plt.show()
 
 				if RECORD == True:
@@ -189,7 +190,7 @@ ax.yaxis.grid(True)
 
 # Save the figure and show
 plt.tight_layout()
-plt.savefig('sync/bar_plot_with_error_bars.png')
+plt.savefig('sync/Static_bar_plot_with_error_bars.png')
 plt.show()
 
 
